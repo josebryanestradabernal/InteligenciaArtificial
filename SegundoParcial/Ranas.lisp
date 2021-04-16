@@ -6,15 +6,19 @@
 ;;;         La representación de estados consta de una lista con ranas verdes y ranas rojas en los extremos
 ;;;         mientras que el centro hay un espacio vacio
 ;;;                 Estado inciial:        Estado meta:
-;;;                 R R R V G G G        G G G V R R R
-;;;               ( R R R V G G G (3))     (G G G V R R R (3) )
+;;;                 R R R V G G G  Pos(V)       G G G V R R R Pos(V)
+;;;               ( (R R R V G G G) (3))     ((G G G V R R R) (3) )
 ;;;
 ;;;      Estrada Bernal José Bryan 
 ;;;      Basado en el codigo de Misioneros y Canibales del: Dr. Salvador Godoy C.
 ;;;  Abril 10, 2021
 ;;;======================================================================================
-(defparameter  *open* '())    ;; Frontera de busqueda...                                              
-(defparameter  *memory* '())  ;; Memoria de intentos previos
+
+;;;-------------------------ALGORITMO----------------------------------------------------
+
+
+(defparameter  *open* '())              ;; Frontera de busqueda...                                              
+(defparameter  *memory* '())            ;; Memoria de intentos previos
 
 (defparameter  *ops*  '( (:avanza-rojo 1 )
                          (:avanza-verde -1)
@@ -24,10 +28,12 @@
                          (:salta-verde2 -3)
                          ))
 
-(defparameter  *id*  -1)  ;; Identificador del ultimo nodo creado
-(defparameter  *current-ancestor*  nil)  ;;Id del ancestro común a todos los descendientes que se generen
-(defparameter  *solucion*  nil)  ;;lista donde se almacenará la solución recuperada de la memoria
-
+(defparameter  *id*  -1)                ;; Identificador del ultimo nodo creado
+(defparameter  *current-ancestor*  nil) ;;Id del ancestro común a todos los descendientes que se generen
+(defparameter  *solucion*  nil)         ;;lista donde se almacenará la solución recuperada de la memoria
+(defparameter *expanded-nodes* 0)       ;;; nodos expandidos
+(defparameter *max-length* 0)           ;;; maxima longitud de la frontera de busqueda
+(defparameter *running-time* NIL)       ;;; tiempo que se tardo el algoritmo de busqueda ya se a los profundo o a lo ancho
 ;;;=======================================================================================
 ;;  CREATE-NODE (estado  op)  
 ;;      estado - Un estado del problema a resolver (sistema)...
@@ -60,16 +66,6 @@
 "Recupera el siguiente elemento a revisar de  frontera de busqueda *open*"
       (pop  *open*))
 
-;;;=======================================================================================
-;;  BARGE-SHORE (estado)
-;;        Regresa la orilla del rio en la que se encuentra la barca en  [estado]
-;;           0 - Orilla origen (primer sublista del estado)
-;;           1 - Orilla destino (segunda sublista del estado)
-;;;=======================================================================================
-(defun  barge-shore (estado)
-"Regresa la orilla del río en la que se encuentra la barca en el estado recibido como parámetro:  
-  0 - origen  1 - destino"
-     (if  (= 1 (third (first  estado)))  0  1))
 
 
 ;;;=======================================================================================
@@ -99,20 +95,6 @@
     )
   )
 
-;;;=======================================================================================
-;;  VALID-STATE (estado)
-;;        Predicado.  Indica si [estado]  es valido segun las restricciones del problema
-;;                          Es decir, si en c/orilla hay igual o mayor numero de misioneros que de canibales
-;;;=======================================================================================
-(defun  valid-state? (estado)
-"Predicado. Valida  un estado según las restricciones generales del problema...
-       el estado tiene estructura:  [(<m0><c0><b0>) (<m1><c1><b1>)]"
-    (let ((m0  (first (first estado)))        ;;el estado tiene estructura ((<m0><c0><b0>) (<m1><c1><b1>)) ...
-	    (c0  (second (first estado)))
-	    (m1  (first (second estado)))
-	    (c1  (second (second estado))))
-      (and  (or  (>=  m0 c0) (zerop m0))  ;;mayor o igual número de misioneros que caníbales, excepto si hay 0 misioneros
-    	        (or  (>=  m1 c1) (zerop m1))))  )
 
     
 ;;;=======================================================================================
@@ -120,21 +102,20 @@
 ;;        Resuelve la tarea básica de cambiar de estado el sistema...
 ;;;=======================================================================================
 
-(defun flip (bit)  (boole  BOOLE-XOR  bit  1))
 
 (defun  apply-operator (op  estado) 
-"Obtiene el descendiente de [estado] al aplicarle  [op]  SIN VALIDACIONES"
+"Obtiene el descendiente de [estado] al aplicarle  [op] SIN VALIDACIONES"
     (let*  ((salto  (second  op))
-	       (vacio (first (second estado)))
-               (copia (copy-list(first estado)))
-               (posFinal (- vacio salto));; al espacio vacio se le resta el salto si el salto es positivo el 
-                                         ;; espacio vacio se recorre negativamente
+	       (vacio (first (second estado)))   ;;es el espacio que esta vacio es decir la roca que se encuentra vacia
+               (copia (copy-list(first estado))) ;;es una copia de la lista que contiene a las ranas y el espacio vacio
+               (posFinal (- vacio salto))        ;; al espacio vacio se le resta el salto si el salto es positivo el 
+                                                 ;; espacio vacio se recorre negativamente
                (rana (nth posFinal copia))
-               )     ;; el operados solo intercambia donde va el vacio y donde va la rana que se intercambia
+               )                                 ;; el operador solo intercambia donde va el vacio y donde va la rana que se intercambia
                 
                (setf (elt copia posFinal) 'V)
                (setf (elt copia vacio) rana)
-               (list copia (list posFinal))
+               (list copia (list posFinal))      ;; Regresa una lista con la forma ((R0...V....Rn)(PosV)) donde R es ranas y posv es la posicion de la roca vacia
       )
     )
 
@@ -144,7 +125,10 @@
 ;;        Construye y regresa una lista con todos los descendientes validos de [estado]
 ;;;=======================================================================================
 (defun expand (estado)
-"Obtiene todos los descendientes válidos de un estado, aplicando todos los operadores en *ops* en ese mismo órden"
+"Obtiene todos los descendientes válidos de un estado, aplicando todos los operadores en *ops* en ese mismo órden 
+ para este caso especial de las ranas a la hora de aplicar la validacion del operador tambien valida
+ que el estado nuevo sera valido por lo que no se realiza valid-state?"
+     (incf *expanded-nodes*)
      (let ((descendientes  nil)
 	     (nuevo-estado  nil))
            (dolist  (op  *Ops*  descendientes) 
@@ -160,7 +144,7 @@
 ;;;=======================================================================================
 (defun  remember-state?  (estado  lista-memoria)
 "Busca un estado en una lista de nodos que sirve como memoria de intentos previos
-     el estado tiene estructura:  [(<m0><c0><b0>) (<m1><c1><b1>)],
+     el estado tiene estructura:  [(<r0> .. <vacio>..<rn>) (#vacio)],
      el nodo tiene estructura : [<Id> <estado> <id-ancestro> <operador> ]"  
      (cond ((null  lista-memoria)  Nil)
 	        ((equal  estado  (second (first  lista-memoria)))  T)  ;;el estado es igual al que se encuentra en el nodo?
@@ -221,7 +205,10 @@
      (setq  *memory*  nil)
      (setq  *id*  0)
      (setq  *current-ancestor*  nil)
-     (setq  *solucion*  nil))
+     (setq  *solucion*  nil)
+     (setq  *expanded-nodes* 0)
+     (setq  *max-length* 0)
+     )
 
 
 (defun  blind-search (edo-inicial  edo-meta  metodo)
@@ -250,8 +237,45 @@
 			     (setq  sucesores  (expand estado))
 			     (setq  sucesores  (filter-memories  sucesores))     ;;Filtrar los estados ya revisados...
 			      (loop for  element  in  sucesores  do
-				    (insert-to-open  (first element)  (second element)  metodo))))))  )
+				    (insert-to-open  (first element)  (second element)  metodo)
+                        (if (> (length *open*) *max-length*)
+                              (setq *max-length* (length *open*))
+                         )
+                        )))))  )
 			     
      
 ;;;=======================================================================================
+;;; Stats
+;;; Estadisticas de desempeño del algoritmo generalizado para depth and breath first search
 ;;;=======================================================================================
+(defun stats ()
+  (format t "~%Nodos creados: ~a~%" *id*)
+  (format t "Nodos expandidos: ~a~%" *expanded-nodes*)
+  (format t "Longitud maxima de la frontera de busqueda: ~a~%" *max-length*)
+  (format t "Longitud de la solución: ~a operadores aplicados~%" (1- (length *solution*)))
+  (format t "Tiempo total: ~a segundos~%" (float *running-time*))
+  )
+
+(defparameter time1 NIL)
+(defparameter time2 NIL)
+
+
+
+(format t "~%Busqueda a lo profundo DFS: ~%")
+(setq time1 (get-internal-run-time))
+
+(blind-search '((R R R V G G G) (3)) '((G G G V R R R) (3)) :depth-first)
+(setq time2 (get-internal-run-time))
+(setq *running-time* (/ (- time2 time1) internal-time-units-per-second))
+(stats)
+
+
+
+(format t "~%Busqueda a lo ancho: BFS: ~%")
+(setq time1 (get-internal-run-time))
+
+(blind-search '((R R R V G G G) (3)) '((G G G V R R R) (3)) :breath-first)
+
+(setq time2 (get-internal-run-time))
+(setq *running-time* (/ (- time2 time1) internal-time-units-per-second))
+(stats)

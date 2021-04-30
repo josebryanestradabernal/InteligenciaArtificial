@@ -1,6 +1,6 @@
 ;;;=====================================================================
 ;;;  Este programa presenta una solución al 
-;;;  problema de laberintos 2D como parte del examen
+;;;  problema de laberintos 3D como parte del examen
 ;;;  de la materia de Fundamentos de Inteligencia Artificial
 ;;;  
 ;;;  CREADO POR: ESTRADA  BERNAL JOSÉ BRYAN
@@ -22,8 +22,9 @@
 (defparameter *ops*  '(
                     
                       (:Arriba 0 )
-                      (:Derecha 2)
                       (:Abajo 4)
+                      (:Derecha 2)
+                      
                      
                      (:Izquierda 6)
  
@@ -95,12 +96,11 @@
         (col (second estado ))
         (wall (get-cell-walls row col)) 
         (aux nil)
-        (cel2 nil)
         (rowL (1- (get-maze-rows)))
         (colL (1- (get-maze-cols)))
         )
     ;;;movimientos normales
-     (cond
+    (cond
     ((or (equal 16 (logand wall 16))(equal 17 (logand wall 17)))
     (setq aux (equal (third estado) (up-down movF)))
     )
@@ -110,31 +110,32 @@
     )
     )
     ( if aux
+   
     (case movF
       ( :Arriba
-       (and  (= 0 (logand 1 wall)) (> row 0))
+       (or (and  (= 0 (logand 1 wall)) (> row 0)) (and (equal wall 17) (> row 0)))
        )
        
       ( :Derecha
-       (and (= 0 (logand 2 wall)) (< col colL))
-
+         (and (= 0 (logand 2 wall)) (< col colL))
        )
       
       ( :Abajo
-       (and (= 0 (logand 4 wall))  (< row rowL))
+      (and (= 0 (logand 4 wall))  (< row rowL))
        )
-       
-       
       ( :Izquierda
-       (and  (= 0 (logand 8 wall)) (> col 0))
+        (and  (= 0 (logand 8 wall)) (> col 0))
        )
-       
-       
     )
-    ))
+    )
     
     )
-
+    
+    )
+;;=======================up Down=======
+;; Sirve para validar si se entro a una casilla 
+;; 16 o 17 de forma horizontal o de forma vertical
+;;=====================================
 (defun up-down(op)
   (if (or (equal op :Derecha ) (equal op :Izquierda))
   1
@@ -149,7 +150,6 @@
         (col (second  estado ))
         (walls (get-cell-walls row col))
         (movF (first op))
-        (dir nil)
         (mov (second op))
      )
          (cond
@@ -197,9 +197,24 @@
 "Busca un estado en una lista de nodos que sirve como memoria de intentos previos
      el estado tiene estructura:  [(<m0><c0><b0>) (<m1><c1><b1>)],
      el nodo tiene estructura : [<Id> <estado> <id-ancestro> <operador> ]"  
+    (let*
+     (
+
+       (row (first estado ) )
+        (col (second  estado ))
+        (walls (get-cell-walls row col))
+        (evalu (second (first  lista-memoria)) )
+     )
+     (if (not (or (equal walls 16) (equal walls 17)))
+        (setf (elt estado 2) nil)
+     )
      (cond ((null  lista-memoria)  Nil)
-	        ((equal  estado  (second (first  lista-memoria)))  T)  ;;el estado es igual al que se encuentra en el nodo?
-		(T  (remember-state?  estado  (rest  lista-memoria))))  )
+	        ((equal  estado evalu )
+            T
+            )  ;;el estado es igual al que se encuentra en el nodo?
+         
+
+		(T  (remember-state?  estado  (rest  lista-memoria))))  ))
 
 
 (defun  filter-memories (lista-estados-y-ops) 
@@ -284,7 +299,7 @@
 		         (t (setq  *current-ancestor*  (first  nodo)) 
 			     (setq  sucesores  (expand estado))
 			     (setq  sucesores  (filter-memories  sucesores))
-           (format t "~A ~%==============~%" sucesores)
+           
            (if (eql metodo :best-first) (setq sucesores (filter-open sucesores)) )    ;;Filtrar los estados ya revisados...
 			      (loop for  element  in  sucesores  do
 				    
